@@ -22,4 +22,7 @@ messageRouter.put("/conversations/:conversationId", messageController.updateConv
 messageRouter.post("/conversations/:conversationId/members", messageController.addMember);
 messageRouter.delete("/conversations/:conversationId/members/:userId", messageController.removeMember);
 
+// Broadcast messaging
+messageRouter.post("/broadcast", messageController.broadcastMessage);
+
 export default messageRouter;

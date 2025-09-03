@@ -448,6 +448,137 @@ export class UserController {
       });
     }
   }
+
+  async createRole(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user || req.user.role !== 'admin') {
+        res.status(403).json({ error: 'Only admins can create roles' });
+        return;
+      }
+
+      const { name, permissions, description } = req.body;
+
+      if (!name) {
+        res.status(400).json({ error: 'Role name is required' });
+        return;
+      }
+
+      const predefinedRoles = ['admin', 'moderator', 'user', 'guest'];
+      
+      if (predefinedRoles.includes(name.toLowerCase())) {
+        res.status(409).json({ error: 'Role already exists as a predefined role' });
+        return;
+      }
+
+      res.status(201).json({ 
+        message: 'Role creation is handled through user role assignment',
+        availableRoles: predefinedRoles
+      });
+    } catch (error) {
+      console.error('Create role error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to create role' 
+      });
+    }
+  }
+
+  async getRoles(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user || req.user.role !== 'admin') {
+        res.status(403).json({ error: 'Only admins can view roles' });
+        return;
+      }
+
+      const roles = [
+        { 
+          id: 'admin', 
+          name: 'Admin', 
+          description: 'Full system access',
+          permissions: ['all']
+        },
+        { 
+          id: 'moderator', 
+          name: 'Moderator', 
+          description: 'Moderate content and users',
+          permissions: ['moderate_content', 'manage_users']
+        },
+        { 
+          id: 'user', 
+          name: 'User', 
+          description: 'Standard user access',
+          permissions: ['read', 'write', 'participate']
+        },
+        { 
+          id: 'guest', 
+          name: 'Guest', 
+          description: 'Limited read-only access',
+          permissions: ['read']
+        }
+      ];
+
+      const roleUsage = await db()
+        .select({
+          role: users.role,
+          count: users.id
+        })
+        .from(users)
+        .groupBy(users.role);
+
+      const rolesWithCounts = roles.map(role => ({
+        ...role,
+        userCount: roleUsage.filter(u => u.role === role.id).length || 0
+      }));
+
+      res.status(200).json({ roles: rolesWithCounts });
+    } catch (error) {
+      console.error('Get roles error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to fetch roles' 
+      });
+    }
+  }
+
+  async updateRole(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user || req.user.role !== 'admin') {
+        res.status(403).json({ error: 'Only admins can update roles' });
+        return;
+      }
+
+      const { roleId } = req.params;
+      
+      res.status(200).json({ 
+        message: 'Predefined roles cannot be modified. Use user role assignment instead.',
+        roleId 
+      });
+    } catch (error) {
+      console.error('Update role error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to update role' 
+      });
+    }
+  }
+
+  async deleteRole(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user || req.user.role !== 'admin') {
+        res.status(403).json({ error: 'Only admins can delete roles' });
+        return;
+      }
+
+      const { roleId } = req.params;
+      
+      res.status(400).json({ 
+        message: 'Predefined roles cannot be deleted. Use user role assignment instead.',
+        roleId 
+      });
+    } catch (error) {
+      console.error('Delete role error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to delete role' 
+      });
+    }
+  }
 }
 
 export const userController = new UserController();

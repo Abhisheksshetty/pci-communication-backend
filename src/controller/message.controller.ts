@@ -820,6 +820,104 @@ export class MessageController {
       });
     }
   }
+
+  async broadcastMessage(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Not authenticated' });
+        return;
+      }
+
+      const { content, type = 'text', recipientIds, metadata } = req.body;
+
+      if (!content) {
+        res.status(400).json({ error: 'Message content is required' });
+        return;
+      }
+
+      if (!recipientIds || !Array.isArray(recipientIds) || recipientIds.length === 0) {
+        res.status(400).json({ error: 'Recipients are required' });
+        return;
+      }
+
+      const broadcastResults = await db().transaction(async (tx) => {
+        const results = [];
+
+        for (const recipientId of recipientIds) {
+          const [conversation] = await tx
+            .insert(conversations)
+            .values({
+              name: `Broadcast from ${req.user!.username}`,
+              type: 'direct',
+              createdById: req.user!.id
+            })
+            .returning();
+
+          if (conversation?.id) {
+            await tx.insert(conversationMembers).values([
+              {
+                conversationId: conversation.id,
+                userId: req.user!.id,
+                role: 'owner'
+              },
+              {
+                conversationId: conversation.id,
+                userId: recipientId,
+                role: 'member'
+              }
+            ]);
+
+            const [message] = await tx
+              .insert(messages)
+              .values({
+                conversationId: conversation.id,
+                senderId: req.user!.id,
+                type,
+                content,
+                metadata
+              })
+              .returning();
+
+            await tx
+              .update(conversations)
+              .set({
+                lastMessageId: message?.id,
+                lastMessageAt: message?.createdAt,
+                updatedAt: new Date()
+              })
+              .where(eq(conversations.id, conversation.id));
+
+            if (message?.id) {
+              await tx.insert(messageReceipts).values({
+                messageId: message.id,
+                userId: recipientId,
+                isDelivered: false,
+                isRead: false
+              });
+            }
+
+            results.push({
+              recipientId,
+              conversationId: conversation.id,
+              messageId: message?.id
+            });
+          }
+        }
+
+        return results;
+      });
+
+      res.status(201).json({ 
+        message: 'Broadcast sent successfully', 
+        results: broadcastResults 
+      });
+    } catch (error) {
+      console.error('Broadcast message error:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to broadcast message' 
+      });
+    }
+  }
 }
 
 export const messageController = new MessageController();

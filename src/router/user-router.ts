@@ -18,4 +18,10 @@ userRouter.post("/contacts/add", userController.addContact);
 userRouter.delete("/contacts/:contactId", userController.removeContact);
 userRouter.put("/contacts/:contactId/block", userController.blockContact);
 
+// Role management
+userRouter.post("/roles", userController.createRole);
+userRouter.get("/roles", userController.getRoles);
+userRouter.put("/roles/:roleId", userController.updateRole);
+userRouter.delete("/roles/:roleId", userController.deleteRole);
+
 export default userRouter;
