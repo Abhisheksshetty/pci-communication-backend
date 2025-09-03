@@ -1,9 +1,65 @@
 {
-  "id": "99be047e-cde2-4325-a6a3-e4c1bfd8781d",
+  "id": "303e7d91-13dd-42bd-b314-c23d447c4178",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "5",
   "dialect": "pg",
   "tables": {
+    "account": {
+      "name": "account",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "first_name": {
+          "name": "first_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_name": {
+          "name": "last_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "currency",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'USD'"
+        },
+        "balance": {
+          "name": "balance",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {
+        "account_email_idx": {
+          "name": "account_email_idx",
+          "columns": [
+            "email"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
     "attachments": {
       "name": "attachments",
       "schema": "",
@@ -1187,17 +1243,11 @@
           "primaryKey": false,
           "notNull": true
         },
-        "token": {
-          "name": "token",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
         "refresh_token": {
           "name": "refresh_token",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "ip_address": {
           "name": "ip_address",
@@ -1217,8 +1267,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "is_active": {
-          "name": "is_active",
+        "is_valid": {
+          "name": "is_valid",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
@@ -1243,16 +1293,16 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
-        "user_sessions_token_idx": {
-          "name": "user_sessions_token_idx",
-          "columns": [
-            "token"
-          ],
-          "isUnique": true
-        },
         "user_sessions_refresh_token_idx": {
           "name": "user_sessions_refresh_token_idx",
           "columns": [
@@ -1274,10 +1324,10 @@
           ],
           "isUnique": false
         },
-        "user_sessions_is_active_idx": {
-          "name": "user_sessions_is_active_idx",
+        "user_sessions_is_valid_idx": {
+          "name": "user_sessions_is_valid_idx",
           "columns": [
-            "is_active"
+            "is_valid"
           ],
           "isUnique": false
         }
@@ -1299,13 +1349,6 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "user_sessions_token_unique": {
-          "name": "user_sessions_token_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
-        },
         "user_sessions_refresh_token_unique": {
           "name": "user_sessions_refresh_token_unique",
           "nullsNotDistinct": false,
@@ -1506,6 +1549,14 @@
         "direct": "direct",
         "group": "group",
         "channel": "channel"
+      }
+    },
+    "currency": {
+      "name": "currency",
+      "values": {
+        "USD": "USD",
+        "EUR": "EUR",
+        "GBP": "GBP"
       }
     },
     "member_role": {

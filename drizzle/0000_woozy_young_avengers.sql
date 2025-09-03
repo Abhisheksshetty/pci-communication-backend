@@ -5,6 +5,12 @@ EXCEPTION
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN
+ CREATE TYPE "currency" AS ENUM('USD', 'EUR', 'GBP');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
  CREATE TYPE "member_role" AS ENUM('owner', 'admin', 'moderator', 'member');
 EXCEPTION
  WHEN duplicate_object THEN null;
@@ -33,6 +39,15 @@ DO $$ BEGIN
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "account" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"email" varchar(255) NOT NULL,
+	"first_name" varchar(255) NOT NULL,
+	"last_name" varchar(255) NOT NULL,
+	"currency" "currency" DEFAULT 'USD' NOT NULL,
+	"balance" integer DEFAULT 0 NOT NULL
+);
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "attachments" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -152,16 +167,15 @@ CREATE TABLE IF NOT EXISTS "user_presence" (
 CREATE TABLE IF NOT EXISTS "user_sessions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid NOT NULL,
-	"token" varchar(255) NOT NULL,
-	"refresh_token" varchar(255),
+	"refresh_token" varchar(255) NOT NULL,
 	"ip_address" varchar(45),
 	"user_agent" text,
 	"device_info" json,
-	"is_active" boolean DEFAULT true NOT NULL,
+	"is_valid" boolean DEFAULT true NOT NULL,
 	"last_activity_at" timestamp DEFAULT now() NOT NULL,
 	"expires_at" timestamp NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "user_sessions_token_unique" UNIQUE("token"),
+	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "user_sessions_refresh_token_unique" UNIQUE("refresh_token")
 );
 --> statement-breakpoint
@@ -190,6 +204,7 @@ CREATE TABLE IF NOT EXISTS "users" (
 	CONSTRAINT "users_username_unique" UNIQUE("username")
 );
 --> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "account_email_idx" ON "account" ("email");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "attachments_message_idx" ON "attachments" ("message_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "attachments_mime_type_idx" ON "attachments" ("mime_type");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "conversation_members_unique" ON "conversation_members" ("conversation_id","user_id");--> statement-breakpoint
@@ -228,11 +243,10 @@ CREATE INDEX IF NOT EXISTS "user_contacts_favorite_idx" ON "user_contacts" ("is_
 CREATE UNIQUE INDEX IF NOT EXISTS "user_presence_user_idx" ON "user_presence" ("user_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "user_presence_status_idx" ON "user_presence" ("status");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "user_presence_last_active_idx" ON "user_presence" ("last_active_at");--> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "user_sessions_token_idx" ON "user_sessions" ("token");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "user_sessions_refresh_token_idx" ON "user_sessions" ("refresh_token");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "user_sessions_user_idx" ON "user_sessions" ("user_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "user_sessions_expires_at_idx" ON "user_sessions" ("expires_at");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "user_sessions_is_active_idx" ON "user_sessions" ("is_active");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "user_sessions_is_valid_idx" ON "user_sessions" ("is_valid");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "users_email_idx" ON "users" ("email");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "users_username_idx" ON "users" ("username");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "users_status_idx" ON "users" ("status");--> statement-breakpoint

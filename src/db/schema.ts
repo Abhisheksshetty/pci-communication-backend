@@ -13,7 +13,7 @@ import {
   primaryKey,
   json,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { InferSelectModel, relations } from "drizzle-orm";
 
 export const currencyEnum = pgEnum("currency", ["USD", "EUR", "GBP"]);
 export const userStatusEnum = pgEnum("user_status", ["online", "offline", "away", "busy", "invisible"]);
@@ -23,254 +23,328 @@ export const notificationTypeEnum = pgEnum("notification_type", ["message", "men
 export const memberRoleEnum = pgEnum("member_role", ["owner", "admin", "moderator", "member"]);
 export const reactionTypeEnum = pgEnum("reaction_type", ["like", "love", "laugh", "wow", "sad", "angry"]);
 
-export const accountTable = pgTable("account", {
-  id: serial("id").primaryKey(),
-  email: varchar("email", { length: 255 }).notNull(),
-  firstName: varchar("first_name", { length: 255 }).notNull(),
-  lastName: varchar("last_name", { length: 255 }).notNull(),
-  currency: currencyEnum("currency").notNull().default("USD"),
-  balance: integer("balance").notNull().default(0),
-}, (table) => ({
-  emailIdx: index("account_email_idx").on(table.email),
-}));
+export const accountTable = pgTable(
+  "account",
+  {
+    id: serial("id").primaryKey(),
+    email: varchar("email", { length: 255 }).notNull(),
+    firstName: varchar("first_name", { length: 255 }).notNull(),
+    lastName: varchar("last_name", { length: 255 }).notNull(),
+    currency: currencyEnum("currency").notNull().default("USD"),
+    balance: integer("balance").notNull().default(0),
+  },
+  (table) => ({
+    emailIdx: index("account_email_idx").on(table.email),
+  })
+);
 
-export const users = pgTable("users", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  email: varchar("email", { length: 255 }).notNull().unique(),
-  username: varchar("username", { length: 50 }).notNull().unique(),
-  passwordHash: varchar("password_hash", { length: 255 }).notNull(),
-  firstName: varchar("first_name", { length: 100 }),
-  lastName: varchar("last_name", { length: 100 }),
-  displayName: varchar("display_name", { length: 100 }),
-  bio: text("bio"),
-  avatarUrl: text("avatar_url"),
-  phoneNumber: varchar("phone_number", { length: 20 }),
-  accountId: integer("account_id").references(() => accountTable.id, { onDelete: "set null" }),
-  status: userStatusEnum("status").default("offline").notNull(),
-  statusMessage: varchar("status_message", { length: 255 }),
-  lastSeenAt: timestamp("last_seen_at", { mode: "date" }),
-  isEmailVerified: boolean("is_email_verified").default(false).notNull(),
-  isPhoneVerified: boolean("is_phone_verified").default(false).notNull(),
-  isActive: boolean("is_active").default(true).notNull(),
-  isTwoFactorEnabled: boolean("is_two_factor_enabled").default(false).notNull(),
-  notificationSettings: json("notification_settings").$type<{
-    email: boolean;
-    push: boolean;
-    sound: boolean;
-    desktop: boolean;
-  }>().default({ email: true, push: true, sound: true, desktop: true }),
-  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
-}, (table) => ({
-  emailIdx: uniqueIndex("users_email_idx").on(table.email),
-  usernameIdx: uniqueIndex("users_username_idx").on(table.username),
-  statusIdx: index("users_status_idx").on(table.status),
-  createdAtIdx: index("users_created_at_idx").on(table.createdAt),
-  accountIdx: index("users_account_idx").on(table.accountId),
-}));
+export const users = pgTable(
+  "users",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    email: varchar("email", { length: 255 }).notNull().unique(),
+    username: varchar("username", { length: 50 }).notNull().unique(),
+    passwordHash: varchar("password_hash", { length: 255 }).notNull(),
+    firstName: varchar("first_name", { length: 100 }),
+    lastName: varchar("last_name", { length: 100 }),
+    fullName: varchar("full_name", { length: 200 }),
+    displayName: varchar("display_name", { length: 100 }),
+    bio: text("bio"),
+    avatarUrl: text("avatar_url"),
+    phoneNumber: varchar("phone_number", { length: 20 }),
+    role: varchar("role", { length: 50 }).default("player").notNull(),
+    status: userStatusEnum("status").default("offline").notNull(),
+    statusMessage: varchar("status_message", { length: 255 }),
+    lastSeenAt: timestamp("last_seen_at", { mode: "date" }),
+    isEmailVerified: boolean("is_email_verified").default(false).notNull(),
+    isPhoneVerified: boolean("is_phone_verified").default(false).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    isTwoFactorEnabled: boolean("is_two_factor_enabled").default(false).notNull(),
+    notificationSettings: json("notification_settings")
+      .$type<{
+        email: boolean;
+        push: boolean;
+        sound: boolean;
+        desktop: boolean;
+      }>()
+      .default({ email: true, push: true, sound: true, desktop: true }),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    emailIdx: uniqueIndex("users_email_idx").on(table.email),
+    usernameIdx: uniqueIndex("users_username_idx").on(table.username),
+    statusIdx: index("users_status_idx").on(table.status),
+    createdAtIdx: index("users_created_at_idx").on(table.createdAt),
+  })
+);
 
-export const conversations = pgTable("conversations", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  name: varchar("name", { length: 255 }),
-  description: text("description"),
-  type: conversationTypeEnum("type").notNull(),
-  avatarUrl: text("avatar_url"),
-  isArchived: boolean("is_archived").default(false).notNull(),
-  isPinned: boolean("is_pinned").default(false).notNull(),
-  lastMessageId: uuid("last_message_id"),
-  lastMessageAt: timestamp("last_message_at", { mode: "date" }),
-  metadata: json("metadata").$type<Record<string, any>>(),
-  createdById: uuid("created_by_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
-}, (table) => ({
-  typeIdx: index("conversations_type_idx").on(table.type),
-  lastMessageAtIdx: index("conversations_last_message_at_idx").on(table.lastMessageAt),
-  createdByIdx: index("conversations_created_by_idx").on(table.createdById),
-  archivedIdx: index("conversations_archived_idx").on(table.isArchived),
-}));
+export const conversations = pgTable(
+  "conversations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 255 }),
+    description: text("description"),
+    type: conversationTypeEnum("type").notNull(),
+    avatarUrl: text("avatar_url"),
+    isArchived: boolean("is_archived").default(false).notNull(),
+    isPinned: boolean("is_pinned").default(false).notNull(),
+    lastMessageId: uuid("last_message_id"),
+    lastMessageAt: timestamp("last_message_at", { mode: "date" }),
+    metadata: json("metadata").$type<Record<string, any>>(),
+    createdById: uuid("created_by_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    typeIdx: index("conversations_type_idx").on(table.type),
+    lastMessageAtIdx: index("conversations_last_message_at_idx").on(table.lastMessageAt),
+    createdByIdx: index("conversations_created_by_idx").on(table.createdById),
+    archivedIdx: index("conversations_archived_idx").on(table.isArchived),
+  })
+);
 
-export const conversationMembers = pgTable("conversation_members", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  conversationId: uuid("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  role: memberRoleEnum("role").default("member").notNull(),
-  nickname: varchar("nickname", { length: 100 }),
-  isMuted: boolean("is_muted").default(false).notNull(),
-  mutedUntil: timestamp("muted_until", { mode: "date" }),
-  isPinned: boolean("is_pinned").default(false).notNull(),
-  lastReadMessageId: uuid("last_read_message_id"),
-  lastReadAt: timestamp("last_read_at", { mode: "date" }),
-  unreadCount: integer("unread_count").default(0).notNull(),
-  joinedAt: timestamp("joined_at", { mode: "date" }).defaultNow().notNull(),
-  leftAt: timestamp("left_at", { mode: "date" }),
-}, (table) => ({
-  conversationUserUnique: uniqueIndex("conversation_members_unique").on(table.conversationId, table.userId),
-  conversationIdx: index("conversation_members_conversation_idx").on(table.conversationId),
-  userIdx: index("conversation_members_user_idx").on(table.userId),
-  lastReadAtIdx: index("conversation_members_last_read_at_idx").on(table.lastReadAt),
-}));
+export const conversationMembers = pgTable(
+  "conversation_members",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: memberRoleEnum("role").default("member").notNull(),
+    nickname: varchar("nickname", { length: 100 }),
+    isMuted: boolean("is_muted").default(false).notNull(),
+    mutedUntil: timestamp("muted_until", { mode: "date" }),
+    isPinned: boolean("is_pinned").default(false).notNull(),
+    lastReadMessageId: uuid("last_read_message_id"),
+    lastReadAt: timestamp("last_read_at", { mode: "date" }),
+    unreadCount: integer("unread_count").default(0).notNull(),
+    joinedAt: timestamp("joined_at", { mode: "date" }).defaultNow().notNull(),
+    leftAt: timestamp("left_at", { mode: "date" }),
+  },
+  (table) => ({
+    conversationUserUnique: uniqueIndex("conversation_members_unique").on(table.conversationId, table.userId),
+    conversationIdx: index("conversation_members_conversation_idx").on(table.conversationId),
+    userIdx: index("conversation_members_user_idx").on(table.userId),
+    lastReadAtIdx: index("conversation_members_last_read_at_idx").on(table.lastReadAt),
+  })
+);
 
-export const messages = pgTable("messages", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  conversationId: uuid("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
-  senderId: uuid("sender_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  replyToId: uuid("reply_to_id"),
-  forwardedFromId: uuid("forwarded_from_id"),
-  type: messageTypeEnum("type").notNull(),
-  content: text("content"),
-  metadata: json("metadata").$type<{
-    fileName?: string;
-    fileSize?: number;
-    mimeType?: string;
-    duration?: number;
-    width?: number;
-    height?: number;
-    url?: string;
-  }>(),
-  isEdited: boolean("is_edited").default(false).notNull(),
-  editedAt: timestamp("edited_at", { mode: "date" }),
-  isDeleted: boolean("is_deleted").default(false).notNull(),
-  deletedAt: timestamp("deleted_at", { mode: "date" }),
-  isPinned: boolean("is_pinned").default(false).notNull(),
-  pinnedAt: timestamp("pinned_at", { mode: "date" }),
-  pinnedById: uuid("pinned_by_id").references(() => users.id),
-  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-}, (table) => ({
-  conversationIdx: index("messages_conversation_idx").on(table.conversationId),
-  senderIdx: index("messages_sender_idx").on(table.senderId),
-  createdAtIdx: index("messages_created_at_idx").on(table.createdAt),
-  conversationCreatedAtIdx: index("messages_conversation_created_at_idx").on(table.conversationId, table.createdAt),
-  replyToIdx: index("messages_reply_to_idx").on(table.replyToId),
-  typeIdx: index("messages_type_idx").on(table.type),
-  deletedIdx: index("messages_deleted_idx").on(table.isDeleted),
-}));
+export const messages = pgTable(
+  "messages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    senderId: uuid("sender_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    replyToId: uuid("reply_to_id"),
+    forwardedFromId: uuid("forwarded_from_id"),
+    type: messageTypeEnum("type").notNull(),
+    content: text("content"),
+    metadata: json("metadata").$type<{
+      fileName?: string;
+      fileSize?: number;
+      mimeType?: string;
+      duration?: number;
+      width?: number;
+      height?: number;
+      url?: string;
+    }>(),
+    isEdited: boolean("is_edited").default(false).notNull(),
+    editedAt: timestamp("edited_at", { mode: "date" }),
+    isDeleted: boolean("is_deleted").default(false).notNull(),
+    deletedAt: timestamp("deleted_at", { mode: "date" }),
+    isPinned: boolean("is_pinned").default(false).notNull(),
+    pinnedAt: timestamp("pinned_at", { mode: "date" }),
+    pinnedById: uuid("pinned_by_id").references(() => users.id),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    conversationIdx: index("messages_conversation_idx").on(table.conversationId),
+    senderIdx: index("messages_sender_idx").on(table.senderId),
+    createdAtIdx: index("messages_created_at_idx").on(table.createdAt),
+    conversationCreatedAtIdx: index("messages_conversation_created_at_idx").on(table.conversationId, table.createdAt),
+    replyToIdx: index("messages_reply_to_idx").on(table.replyToId),
+    typeIdx: index("messages_type_idx").on(table.type),
+    deletedIdx: index("messages_deleted_idx").on(table.isDeleted),
+  })
+);
 
-export const messageReactions = pgTable("message_reactions", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  messageId: uuid("message_id").notNull().references(() => messages.id, { onDelete: "cascade" }),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  emoji: varchar("emoji", { length: 10 }).notNull(),
-  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-}, (table) => ({
-  messageUserEmojiUnique: uniqueIndex("message_reactions_unique").on(table.messageId, table.userId, table.emoji),
-  messageIdx: index("message_reactions_message_idx").on(table.messageId),
-  userIdx: index("message_reactions_user_idx").on(table.userId),
-}));
+export const messageReactions = pgTable(
+  "message_reactions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    emoji: varchar("emoji", { length: 10 }).notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    messageUserEmojiUnique: uniqueIndex("message_reactions_unique").on(table.messageId, table.userId, table.emoji),
+    messageIdx: index("message_reactions_message_idx").on(table.messageId),
+    userIdx: index("message_reactions_user_idx").on(table.userId),
+  })
+);
 
-export const messageReceipts = pgTable("message_receipts", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  messageId: uuid("message_id").notNull().references(() => messages.id, { onDelete: "cascade" }),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  isDelivered: boolean("is_delivered").default(false).notNull(),
-  deliveredAt: timestamp("delivered_at", { mode: "date" }),
-  isRead: boolean("is_read").default(false).notNull(),
-  readAt: timestamp("read_at", { mode: "date" }),
-}, (table) => ({
-  messageUserUnique: uniqueIndex("message_receipts_unique").on(table.messageId, table.userId),
-  messageIdx: index("message_receipts_message_idx").on(table.messageId),
-  userIdx: index("message_receipts_user_idx").on(table.userId),
-  deliveredIdx: index("message_receipts_delivered_idx").on(table.isDelivered),
-  readIdx: index("message_receipts_read_idx").on(table.isRead),
-}));
+export const messageReceipts = pgTable(
+  "message_receipts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    isDelivered: boolean("is_delivered").default(false).notNull(),
+    deliveredAt: timestamp("delivered_at", { mode: "date" }),
+    isRead: boolean("is_read").default(false).notNull(),
+    readAt: timestamp("read_at", { mode: "date" }),
+  },
+  (table) => ({
+    messageUserUnique: uniqueIndex("message_receipts_unique").on(table.messageId, table.userId),
+    messageIdx: index("message_receipts_message_idx").on(table.messageId),
+    userIdx: index("message_receipts_user_idx").on(table.userId),
+    deliveredIdx: index("message_receipts_delivered_idx").on(table.isDelivered),
+    readIdx: index("message_receipts_read_idx").on(table.isRead),
+  })
+);
 
-export const attachments = pgTable("attachments", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  messageId: uuid("message_id").notNull().references(() => messages.id, { onDelete: "cascade" }),
-  fileName: varchar("file_name", { length: 255 }).notNull(),
-  fileSize: integer("file_size").notNull(),
-  mimeType: varchar("mime_type", { length: 100 }).notNull(),
-  url: text("url").notNull(),
-  thumbnailUrl: text("thumbnail_url"),
-  metadata: json("metadata").$type<Record<string, any>>(),
-  uploadedAt: timestamp("uploaded_at", { mode: "date" }).defaultNow().notNull(),
-}, (table) => ({
-  messageIdx: index("attachments_message_idx").on(table.messageId),
-  mimeTypeIdx: index("attachments_mime_type_idx").on(table.mimeType),
-}));
+export const attachments = pgTable(
+  "attachments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    fileName: varchar("file_name", { length: 255 }).notNull(),
+    fileSize: integer("file_size").notNull(),
+    mimeType: varchar("mime_type", { length: 100 }).notNull(),
+    url: text("url").notNull(),
+    thumbnailUrl: text("thumbnail_url"),
+    metadata: json("metadata").$type<Record<string, any>>(),
+    uploadedAt: timestamp("uploaded_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    messageIdx: index("attachments_message_idx").on(table.messageId),
+    mimeTypeIdx: index("attachments_mime_type_idx").on(table.mimeType),
+  })
+);
 
-export const userContacts = pgTable("user_contacts", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  contactId: uuid("contact_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  nickname: varchar("nickname", { length: 100 }),
-  isBlocked: boolean("is_blocked").default(false).notNull(),
-  isFavorite: boolean("is_favorite").default(false).notNull(),
-  addedAt: timestamp("added_at", { mode: "date" }).defaultNow().notNull(),
-}, (table) => ({
-  userContactUnique: uniqueIndex("user_contacts_unique").on(table.userId, table.contactId),
-  userIdx: index("user_contacts_user_idx").on(table.userId),
-  contactIdx: index("user_contacts_contact_idx").on(table.contactId),
-  blockedIdx: index("user_contacts_blocked_idx").on(table.isBlocked),
-  favoriteIdx: index("user_contacts_favorite_idx").on(table.isFavorite),
-}));
+export const userContacts = pgTable(
+  "user_contacts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    contactId: uuid("contact_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    nickname: varchar("nickname", { length: 100 }),
+    isBlocked: boolean("is_blocked").default(false).notNull(),
+    isFavorite: boolean("is_favorite").default(false).notNull(),
+    addedAt: timestamp("added_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    userContactUnique: uniqueIndex("user_contacts_unique").on(table.userId, table.contactId),
+    userIdx: index("user_contacts_user_idx").on(table.userId),
+    contactIdx: index("user_contacts_contact_idx").on(table.contactId),
+    blockedIdx: index("user_contacts_blocked_idx").on(table.isBlocked),
+    favoriteIdx: index("user_contacts_favorite_idx").on(table.isFavorite),
+  })
+);
 
-export const notifications = pgTable("notifications", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  type: notificationTypeEnum("type").notNull(),
-  title: varchar("title", { length: 255 }).notNull(),
-  body: text("body"),
-  data: json("data").$type<Record<string, any>>(),
-  isRead: boolean("is_read").default(false).notNull(),
-  readAt: timestamp("read_at", { mode: "date" }),
-  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-}, (table) => ({
-  userIdx: index("notifications_user_idx").on(table.userId),
-  typeIdx: index("notifications_type_idx").on(table.type),
-  isReadIdx: index("notifications_is_read_idx").on(table.isRead),
-  createdAtIdx: index("notifications_created_at_idx").on(table.createdAt),
-  userIsReadIdx: index("notifications_user_is_read_idx").on(table.userId, table.isRead),
-}));
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: notificationTypeEnum("type").notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    body: text("body"),
+    data: json("data").$type<Record<string, any>>(),
+    isRead: boolean("is_read").default(false).notNull(),
+    readAt: timestamp("read_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdx: index("notifications_user_idx").on(table.userId),
+    typeIdx: index("notifications_type_idx").on(table.type),
+    isReadIdx: index("notifications_is_read_idx").on(table.isRead),
+    createdAtIdx: index("notifications_created_at_idx").on(table.createdAt),
+    userIsReadIdx: index("notifications_user_is_read_idx").on(table.userId, table.isRead),
+  })
+);
 
-export const userSessions = pgTable("user_sessions", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  token: varchar("token", { length: 255 }).notNull().unique(),
-  refreshToken: varchar("refresh_token", { length: 255 }).unique(),
-  ipAddress: varchar("ip_address", { length: 45 }),
-  userAgent: text("user_agent"),
-  deviceInfo: json("device_info").$type<{
-    type?: string;
-    os?: string;
-    browser?: string;
-  }>(),
-  isActive: boolean("is_active").default(true).notNull(),
-  lastActivityAt: timestamp("last_activity_at", { mode: "date" }).defaultNow().notNull(),
-  expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
-  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-}, (table) => ({
-  tokenIdx: uniqueIndex("user_sessions_token_idx").on(table.token),
-  refreshTokenIdx: uniqueIndex("user_sessions_refresh_token_idx").on(table.refreshToken),
-  userIdx: index("user_sessions_user_idx").on(table.userId),
-  expiresAtIdx: index("user_sessions_expires_at_idx").on(table.expiresAt),
-  isActiveIdx: index("user_sessions_is_active_idx").on(table.isActive),
-}));
+export const userSessions = pgTable(
+  "user_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    refreshToken: varchar("refresh_token", { length: 255 }).notNull().unique(),
+    ipAddress: varchar("ip_address", { length: 45 }),
+    userAgent: text("user_agent"),
+    deviceInfo: json("device_info").$type<{
+      type?: string;
+      os?: string;
+      browser?: string;
+    }>(),
+    isValid: boolean("is_valid").default(true).notNull(),
+    lastActivityAt: timestamp("last_activity_at", { mode: "date" }).defaultNow().notNull(),
+    expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    refreshTokenIdx: uniqueIndex("user_sessions_refresh_token_idx").on(table.refreshToken),
+    userIdx: index("user_sessions_user_idx").on(table.userId),
+    expiresAtIdx: index("user_sessions_expires_at_idx").on(table.expiresAt),
+    isValidIdx: index("user_sessions_is_valid_idx").on(table.isValid),
+  })
+);
 
-export const userPresence = pgTable("user_presence", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
-  status: userStatusEnum("status").notNull(),
-  lastActiveAt: timestamp("last_active_at", { mode: "date" }).defaultNow().notNull(),
-  currentConversationId: uuid("current_conversation_id").references(() => conversations.id, { onDelete: "set null" }),
-  isTyping: boolean("is_typing").default(false).notNull(),
-  typingInConversationId: uuid("typing_in_conversation_id").references(() => conversations.id, { onDelete: "set null" }),
-  updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
-}, (table) => ({
-  userIdx: uniqueIndex("user_presence_user_idx").on(table.userId),
-  statusIdx: index("user_presence_status_idx").on(table.status),
-  lastActiveIdx: index("user_presence_last_active_idx").on(table.lastActiveAt),
-}));
-
-export const accountRelations = relations(accountTable, ({ many }) => ({
-  users: many(users),
-}));
+export const userPresence = pgTable(
+  "user_presence",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" })
+      .unique(),
+    status: userStatusEnum("status").notNull(),
+    lastActiveAt: timestamp("last_active_at", { mode: "date" }).defaultNow().notNull(),
+    currentConversationId: uuid("current_conversation_id").references(() => conversations.id, { onDelete: "set null" }),
+    isTyping: boolean("is_typing").default(false).notNull(),
+    typingInConversationId: uuid("typing_in_conversation_id").references(() => conversations.id, {
+      onDelete: "set null",
+    }),
+    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdx: uniqueIndex("user_presence_user_idx").on(table.userId),
+    statusIdx: index("user_presence_status_idx").on(table.status),
+    lastActiveIdx: index("user_presence_last_active_idx").on(table.lastActiveAt),
+  })
+);
 
 export const usersRelations = relations(users, ({ many, one }) => ({
-  account: one(accountTable, {
-    fields: [users.accountId],
-    references: [accountTable.id],
-  }),
   conversations: many(conversationMembers),
   messages: many(messages),
   notifications: many(notifications),
@@ -413,3 +487,16 @@ export const userPresenceRelations = relations(userPresence, ({ one }) => ({
     relationName: "typingConversation",
   }),
 }));
+
+// infer types of schema tables
+export type User = InferSelectModel<typeof users>;
+export type Conversation = InferSelectModel<typeof conversations>;
+export type ConversationMember = InferSelectModel<typeof conversationMembers>;
+export type Message = InferSelectModel<typeof messages>;
+export type MessageReaction = InferSelectModel<typeof messageReactions>;
+export type MessageReceipt = InferSelectModel<typeof messageReceipts>;
+export type Attachment = InferSelectModel<typeof attachments>;
+export type Notification = InferSelectModel<typeof notifications>;
+export type UserSession = InferSelectModel<typeof userSessions>;
+export type UserContact = InferSelectModel<typeof userContacts>;
+export type UserPresence = InferSelectModel<typeof userPresence>;
