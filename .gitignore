@@ -18,3 +18,7 @@ coverage/
 
 ### Mac OS ###
 .DS_Store
+
+
+### Env ###
+.env

@@ -7,12 +7,15 @@
     "clean": "rm -rf dist coverage",
     "test": "jest --coverage",
     "build": "npx tsc && npm run drizzle:generate && npm run test",
+    "build:dev": "npx tsc",
+    "build:watch": "npx tsc -w",
     "start": "node dist/db/migrate-standalone.js && node dist/index.js",
     "dev": "npm run docker:up && npm run drizzle:generate && npm run drizzle:migrate && nodemon",
-    "docker:up": "docker compose up -d",
+    "docker:up": "docker compose -p communication up -d",
     "docker:down": "docker compose down",
     "drizzle:generate": "drizzle-kit generate:pg",
-    "drizzle:migrate": "npx tsx src/db/migrate-standalone.ts"
+    "drizzle:migrate": "npx tsx src/db/migrate-standalone.ts",
+    "drizzle:push": "drizzle-kit push:pg"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
