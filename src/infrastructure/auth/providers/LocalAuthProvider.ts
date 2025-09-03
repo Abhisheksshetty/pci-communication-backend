@@ -164,6 +164,7 @@ export class LocalAuthProvider implements IAuthProvider {
 
   private async generateTokens(user: User): Promise<AuthTokens> {
     const payload: TokenPayload = {
+      id: user.id,
       userId: user.id,
       email: user.email,
       username: user.username,

@@ -22,6 +22,8 @@ export const conversationTypeEnum = pgEnum("conversation_type", ["direct", "grou
 export const notificationTypeEnum = pgEnum("notification_type", ["message", "mention", "reaction", "system"]);
 export const memberRoleEnum = pgEnum("member_role", ["owner", "admin", "moderator", "member"]);
 export const reactionTypeEnum = pgEnum("reaction_type", ["like", "love", "laugh", "wow", "sad", "angry"]);
+export const eventTypeEnum = pgEnum("event_type", ["training", "match", "meeting", "social", "other"]);
+export const eventStatusEnum = pgEnum("event_status", ["scheduled", "in_progress", "completed", "cancelled", "postponed"]);
 
 export const accountTable = pgTable(
   "account",
@@ -267,6 +269,73 @@ export const userContacts = pgTable(
   })
 );
 
+export const events = pgTable(
+  "events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    title: varchar("title", { length: 255 }).notNull(),
+    description: text("description"),
+    type: eventTypeEnum("type").notNull(),
+    status: eventStatusEnum("status").default("scheduled").notNull(),
+    location: varchar("location", { length: 500 }),
+    startTime: timestamp("start_time", { mode: "date" }).notNull(),
+    endTime: timestamp("end_time", { mode: "date" }).notNull(),
+    isAllDay: boolean("is_all_day").default(false).notNull(),
+    createdById: uuid("created_by_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    maxParticipants: integer("max_participants"),
+    isPublic: boolean("is_public").default(true).notNull(),
+    requiresRsvp: boolean("requires_rsvp").default(false).notNull(),
+    metadata: json("metadata").$type<{
+      teamIds?: string[];
+      tags?: string[];
+      customFields?: Record<string, any>;
+    }>(),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    createdByIdx: index("events_created_by_idx").on(table.createdById),
+    startTimeIdx: index("events_start_time_idx").on(table.startTime),
+    endTimeIdx: index("events_end_time_idx").on(table.endTime),
+    typeIdx: index("events_type_idx").on(table.type),
+    statusIdx: index("events_status_idx").on(table.status),
+    publicIdx: index("events_public_idx").on(table.isPublic),
+  })
+);
+
+export const eventParticipants = pgTable(
+  "event_participants",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    status: varchar("status", { length: 50 })
+      .notNull()
+      .default("invited")
+      .$type<"invited" | "accepted" | "declined" | "maybe" | "attended" | "no_show">(),
+    role: varchar("role", { length: 50 })
+      .notNull()
+      .default("participant")
+      .$type<"organizer" | "participant" | "spectator">(),
+    notes: text("notes"),
+    responseAt: timestamp("response_at", { mode: "date" }),
+    checkInAt: timestamp("check_in_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => ({
+    eventUserUnique: uniqueIndex("event_participants_unique").on(table.eventId, table.userId),
+    eventIdx: index("event_participants_event_idx").on(table.eventId),
+    userIdx: index("event_participants_user_idx").on(table.userId),
+    statusIdx: index("event_participants_status_idx").on(table.status),
+  })
+);
+
 export const notifications = pgTable(
   "notifications",
   {
@@ -355,6 +424,8 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   receipts: many(messageReceipts),
   presence: one(userPresence),
   createdConversations: many(conversations),
+  createdEvents: many(events),
+  eventParticipations: many(eventParticipants),
 }));
 
 export const conversationsRelations = relations(conversations, ({ many, one }) => ({
@@ -488,6 +559,25 @@ export const userPresenceRelations = relations(userPresence, ({ one }) => ({
   }),
 }));
 
+export const eventsRelations = relations(events, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [events.createdById],
+    references: [users.id],
+  }),
+  participants: many(eventParticipants),
+}));
+
+export const eventParticipantsRelations = relations(eventParticipants, ({ one }) => ({
+  event: one(events, {
+    fields: [eventParticipants.eventId],
+    references: [events.id],
+  }),
+  user: one(users, {
+    fields: [eventParticipants.userId],
+    references: [users.id],
+  }),
+}));
+
 // infer types of schema tables
 export type User = InferSelectModel<typeof users>;
 export type Conversation = InferSelectModel<typeof conversations>;
@@ -500,3 +590,5 @@ export type Notification = InferSelectModel<typeof notifications>;
 export type UserSession = InferSelectModel<typeof userSessions>;
 export type UserContact = InferSelectModel<typeof userContacts>;
 export type UserPresence = InferSelectModel<typeof userPresence>;
+export type Event = InferSelectModel<typeof events>;
+export type EventParticipant = InferSelectModel<typeof eventParticipants>;
