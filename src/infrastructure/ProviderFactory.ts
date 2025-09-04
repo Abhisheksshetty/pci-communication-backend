@@ -5,6 +5,7 @@ import { AzureAuthProvider } from './auth/providers/AzureAuthProvider.js';
 import { IStorageProvider, StorageConfig } from './storage/IStorageProvider.js';
 import { LocalStorageProvider } from './storage/LocalStorageProvider.js';
 import { AzureBlobProvider } from './storage/AzureBlobProvider.js';
+import { MinioStorageProvider } from './storage/MinioStorageProvider.js';
 
 import { ICacheProvider, CacheConfig } from './cache/ICacheProvider.js';
 import { RedisProvider } from './cache/RedisProvider.js';
@@ -19,7 +20,7 @@ export interface ProviderConfiguration {
     config: any;
   };
   storage: {
-    provider: 'local' | 'azure' | 's3' | 'gcs';
+    provider: 'local' | 'azure' | 's3' | 'gcs' | 'minio';
     config: StorageConfig;
   };
   cache: {
@@ -182,6 +183,17 @@ export class ProviderFactory {
             this.configuration.storage.config.connectionString || '',
             this.configuration.storage.config.containerName || 'uploads'
           );
+          break;
+        case 'minio':
+          this.storageProvider = new MinioStorageProvider({
+            endPoint: process.env.MINIO_ENDPOINT || 'localhost',
+            port: parseInt(process.env.MINIO_PORT || '9000'),
+            useSSL: process.env.MINIO_USE_SSL === 'true',
+            accessKey: process.env.MINIO_ACCESS_KEY || 'minioadmin',
+            secretKey: process.env.MINIO_SECRET_KEY || 'minioadmin123',
+            bucketName: process.env.MINIO_BUCKET || 'sports-app',
+            baseUrl: process.env.MINIO_BASE_URL || 'http://localhost:9000'
+          });
           break;
         case 'local':
         default:
