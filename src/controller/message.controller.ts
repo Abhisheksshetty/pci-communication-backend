@@ -11,6 +11,8 @@ import {
   users
 } from '../db/schema.js';
 import { AuthenticatedRequest } from '../infrastructure/auth/middleware/authenticate.js';
+import { getSocketService } from '../websocket/SocketService.js';
+import { messageHandler } from '../websocket/handlers/messageHandler.js';
 
 export class MessageController {
   async sendMessage(req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -101,6 +103,15 @@ export class MessageController {
 
         return message;
       });
+
+      // Broadcast new message via WebSocket
+      try {
+        const socketService = getSocketService();
+        await messageHandler.broadcastNewMessage(socketService.getIO(), newMessage);
+      } catch (socketError) {
+        console.error('Socket broadcast error:', socketError);
+        // Don't fail the request if socket broadcasting fails
+      }
 
       res.status(201).json({ message: newMessage });
     } catch (error) {
@@ -262,6 +273,14 @@ export class MessageController {
         .where(eq(messages.id, messageId))
         .returning();
 
+      // Broadcast message update via WebSocket
+      try {
+        const socketService = getSocketService();
+        await messageHandler.broadcastMessageUpdate(socketService.getIO(), updatedMessage[0], 'updated');
+      } catch (socketError) {
+        console.error('Socket broadcast error:', socketError);
+      }
+
       res.status(200).json({ message: updatedMessage[0] });
     } catch (error) {
       console.error('Edit message error:', error);
@@ -325,6 +344,14 @@ export class MessageController {
           content: null
         })
         .where(eq(messages.id, messageId));
+
+      // Broadcast message deletion via WebSocket
+      try {
+        const socketService = getSocketService();
+        await messageHandler.broadcastMessageUpdate(socketService.getIO(), { id: messageId, conversationId: message[0]?.conversationId }, 'deleted');
+      } catch (socketError) {
+        console.error('Socket broadcast error:', socketError);
+      }
 
       res.status(200).json({ message: 'Message deleted successfully' });
     } catch (error) {
@@ -408,6 +435,14 @@ export class MessageController {
         })
         .returning();
 
+      // Broadcast reaction addition via WebSocket
+      try {
+        const socketService = getSocketService();
+        await messageHandler.broadcastReactionUpdate(socketService.getIO(), newReaction[0], 'added');
+      } catch (socketError) {
+        console.error('Socket broadcast error:', socketError);
+      }
+
       res.status(201).json({ reaction: newReaction[0] });
     } catch (error) {
       console.error('Add reaction error:', error);
@@ -451,6 +486,14 @@ export class MessageController {
       if (deletedReaction.length === 0) {
         res.status(404).json({ error: 'Reaction not found' });
         return;
+      }
+
+      // Broadcast reaction removal via WebSocket
+      try {
+        const socketService = getSocketService();
+        await messageHandler.broadcastReactionUpdate(socketService.getIO(), { messageId, userId: req.user.userId, emoji }, 'removed');
+      } catch (socketError) {
+        console.error('Socket broadcast error:', socketError);
       }
 
       res.status(200).json({ message: 'Reaction removed successfully' });
